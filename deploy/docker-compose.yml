@@ -1,0 +1,91 @@
+version: "3.8"
+
+networks:
+  appNet:
+    driver: bridge
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: backend
+    environment:
+      - MODEL_PATH=/models/Qwen2.5-1.5B-Instruct
+      - MODEL_DOWNLOAD_DIR=/models/Qwen2.5-1.5B-Instruct
+      - GPU_UTIL=0.90
+      - MAX_MODEL_LEN=512
+      - MAX_NUM_SEQS=8
+      - SWAP_SPACE=0.5
+      - WARMUP=1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../backend/models:/models:ro
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    gpus: all
+    shm_size: "2g"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 150s
+    networks: [appNet]
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    environment:
+      - BACKEND_URL=http://backend:8080
+      - REQUEST_TIMEOUT=30
+      - MAX_CONCURRENCY=64
+    ports:
+      - "8081:8081"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks: [appNet]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ../monitoring/prometheus/:/etc/prometheus/
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    networks: [appNet]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_DEFAULT_THEME=light
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ../monitoring/grafana/dashboards:/etc/grafana/dashboards
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks: [appNet]
