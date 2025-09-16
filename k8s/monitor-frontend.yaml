@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: frontend-monitor
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  namespaceSelector:
+    matchNames: ["llm-service"]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 8s
+      scrapeTimeout: 4s

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: llm_service
+  name: llm-service
 ---
 apiVersion: v1
 kind: Namespace

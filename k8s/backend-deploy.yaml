@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: llm-service
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      volumes:
+        - name: models
+          hostPath:
+            path: /opt/models # Change this path to your model directory on the host
+            type: Directory
+      containers:
+        - name: backend
+          image: ghcr.io/wpan36/llm-backend:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MODEL_PATH
+              value: /models/Qwen2.5-1.5B-Instruct
+            - name: MODEL_DOWNLOAD_DIR
+              value: /models/Qwen2.5-1.5B-Instruct
+            - name: GPU_UTIL
+              value: "0.90"
+            - name: MAX_MODEL_LEN
+              value: "512"
+            - name: MAX_NUM_SEQS
+              value: "8"
+            - name: SWAP_SPACE
+              value: "0.5"
+            - name: WARMUP
+              value: "1"
+            - name: TOKENIZERS_PARALLELISM
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 20
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 80
+            periodSeconds: 30
+            timeoutSeconds: 20
+            failureThreshold: 3
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: "6Gi"
+            requests:
+              cpu: "500m"
+              memory: "3Gi"
